@@ -20,6 +20,7 @@ const char *argp_program_bug_address = ADDRESS();
 
 static struct argp_option options[] =
     {
+        {"capabilities", 'C', "HIDRAW", 0, "read physical keypad capabilities", 10},
         {"backlight", 'b', "MODE", 0, "set the backlight mode (check the docs)", 40},
         {"backcolor", 'B', "RGB", 0, "set the backlight color with hex RRGGBB (check the docs)", 40},
         {"device", 'd', "DEVICE", 0, "device path", 10},
@@ -41,6 +42,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
     struct wizard::arguments *arguments = (struct wizard::arguments *)state->input;
     switch (key)
     {
+    case 'C':
+        arguments->capabilities_path = arg;
+        break;
     case 'b':
         arguments->backlight = std::stoi(arg);
         break;

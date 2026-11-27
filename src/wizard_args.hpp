@@ -2,7 +2,7 @@
  * \file wizard_args.hpp
  * \author Koch, Roman (koch.roman@gmail.com)
  *
- * Copyright (c) 2023, Roman Koch, koch.roman@gmail.com
+ * SPDX-FileCopyrightText: 2023 Roman Koch <koch.roman@gmail.com>
  * SPDX-License-Identifier: MIT
  */
 
@@ -15,6 +15,7 @@ namespace wizard
 {
     struct arguments
     {
+        const char *capabilities_path{nullptr};
         const char *device; /* wizard device */
         uint32_t unique;    /* unique identifier */
         bool verbose;       /* verbose flag */

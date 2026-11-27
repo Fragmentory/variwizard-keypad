@@ -2,13 +2,14 @@
  * \file wizard.cpp
  * \author Koch, Roman (koch.roman@gmail.com)
  *
- * Copyright (c) 2023, Roman Koch, koch.roman@gmail.com
+ * SPDX-FileCopyrightText: 2023 Roman Koch <koch.roman@gmail.com>
  * SPDX-License-Identifier: MIT
  */
 
 #include <iostream>
 #include <string>
 
+#include "varikey_capabilities.hpp"
 #include "wizard_args.hpp"
 #include "wizard_usb.hpp"
 
@@ -26,6 +27,24 @@ int main(int argc, char *argv[])
 	wizard::arguments arguments;
 	wizard_arguments_init(arguments);
 	wizard_arguments_parse(arguments, argc, argv);
+
+	if (arguments.capabilities_path)
+	{
+		try
+		{
+			const auto caps = varikey::read_usb_capabilities(arguments.capabilities_path);
+			std::cout << "Capacity: " << caps.capacity << '\n';
+			const char *labels[] = {"Soft", "Hard", "Function", "Control left", "Control center", "Control right"};
+			for (std::size_t i = 0; i < caps.counts.size(); ++i)
+				std::cout << labels[i] << ": " << caps.counts[i] << '\n';
+			return 0;
+		}
+		catch (const std::exception &error)
+		{
+			std::cerr << error.what() << '\n';
+			return 1;
+		}
+	}
 
 	static const bool VERBOSE_OUTPUT = arguments.verbose;
 
