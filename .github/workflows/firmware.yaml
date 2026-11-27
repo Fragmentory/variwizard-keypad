@@ -1,60 +1,77 @@
-name: VariWizard
+# SPDX-FileCopyrightText: 2026 Roman Koch
+# SPDX-License-Identifier: MIT
 
+name: VariWizard
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
-  #schedule:
-  #  - cron: '0 2 * * *'
+    branches: [main, develop]
   workflow_dispatch:
-    inputs:
-      BuildType:
-        description: 'Build type'
-        required: true
-        default: Debug
-        type: choice
-        options:
-        - Debug
-        - Release
 
-env:
-  BUILD_TYPE: ${{ inputs.BuildType || 'Debug' }}
+permissions:
+  contents: read
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
+  host:
+    runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4.0.0
-      with:
-        submodules: true
+      - uses: actions/checkout@v4
+      - name: Build and test the Linux host tools
+        run: |
+          cmake -S . -B build-host -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
+          cmake --build build-host
+          ctest --test-dir build-host --output-on-failure --no-tests=error
+          cmake --install build-host --prefix "$RUNNER_TEMP/varikey"
+      - name: Check the installed library and CLI
+        run: |
+          cmake -S tests/installed -B build-consumer -G Ninja -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/varikey"
+          cmake --build build-consumer
+          ./build-consumer/check-installed
+          LD_LIBRARY_PATH="$RUNNER_TEMP/varikey/lib" "$RUNNER_TEMP/varikey/bin/wizard" --version
 
-    - name: Declare variables
-      shell: bash
-      run: |
-        echo "git_short=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-        echo "git_branch=$(echo ${GITHUB_REF#refs/heads/})" >> "$GITHUB_ENV"
-
-    - name: Install libraries
-      run: sudo apt-get install libusb-1.0-0-dev libhidapi-dev -y
-
-    - name: Configure CMake
-      run: cmake --no-warn-unused-cli -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE -H${{github.workspace}} -B${{github.workspace}}/bin -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -G "Unix Makefiles"
-
-    - name: Build
-      run: cmake --build ${{github.workspace}}/bin --config ${{env.BUILD_TYPE}} --target all -j 6
-
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v3.1.3
-      with:
-        name: wizard-bin-${{ env.BUILD_TYPE }}-${{ env.git_short }}
-        path: |
-          ${{github.workspace}}/bin/*.so
-          ${{github.workspace}}/bin/wizard
-        retention-days: 2
-
-    - name: Test
-      working-directory: ${{github.workspace}}/bin
-      run: ctest -C ${{env.BUILD_TYPE}}
-
+  yocto:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out Poky Scarthgap
+        uses: actions/checkout@v4
+        with:
+          repository: yoctoproject/poky
+          ref: 1397cd85032d1582fa4f2512a3f378d71ca39291
+          path: poky
+          persist-credentials: false
+      - name: Install Yocto build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential chrpath cpio debianutils diffstat file \
+            gawk gcc git iputils-ping libacl1 liblz4-tool locales python3 \
+            python3-git python3-jinja2 python3-pexpect python3-pip python3-subunit \
+            socat texinfo unzip wget xz-utils zstd
+          sudo locale-gen en_US.UTF-8
+      - name: Build ARM64 packages and check their contents
+        shell: bash
+        env:
+          LANG: en_US.UTF-8
+        run: |
+          source poky/oe-init-build-env "$RUNNER_TEMP/build-varikey"
+          bitbake-layers add-layer "$GITHUB_WORKSPACE/meta-varikey"
+          cat >> conf/local.conf <<'CONF'
+          MACHINE = "qemuarm64"
+          PACKAGE_CLASSES = "package_ipk"
+          INHERIT += "rm_work"
+          BB_HASHSERVE_UPSTREAM = "wss://hashserv.yoctoproject.org/ws"
+          SSTATE_MIRRORS = "file://.* https://sstate.yoctoproject.org/all/PATH;downloadfilename=PATH"
+          CONF
+          bitbake variwizard
+          oe-pkgdata-util list-pkg-files variwizard | grep -F '/usr/bin/wizard'
+          oe-pkgdata-util list-pkg-files libvarikey-host | grep -F '/libvarikey-host.so.'
+          oe-pkgdata-util list-pkg-files variwizard-dev | grep -F '/VariKeyHostConfig.cmake'
+          mkdir "$RUNNER_TEMP/keypad-packages"
+          find tmp/deploy/ipk -type f \( -name 'variwizard_*.ipk' -o -name 'variwizard-dev_*.ipk' -o -name 'libvarikey-host*.ipk' \) \
+            -exec cp -t "$RUNNER_TEMP/keypad-packages" -- {} +
+      - uses: actions/upload-artifact@v4
+        with:
+          name: variwizard-scarthgap-arm64-${{ github.sha }}
+          path: ${{ runner.temp }}/keypad-packages/*.ipk
+          if-no-files-found: error

@@ -2,7 +2,7 @@
  * \file wizard_args.cpp
  * \author Koch, Roman (koch.roman@gmail.com)
  *
- * Copyright (c) 2023, Roman Koch, koch.roman@gmail.com
+ * SPDX-FileCopyrightText: 2023 Roman Koch <koch.roman@gmail.com>
  * SPDX-License-Identifier: MIT
  */
 
@@ -11,7 +11,7 @@
 #include <iostream>
 
 #include "wizard_args.hpp"
-#include "wizard_revision.h"
+#include <wizard_revision.h>
 
 wizard::arguments arguments = {};
 
