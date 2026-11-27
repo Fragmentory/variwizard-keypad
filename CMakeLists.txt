@@ -15,7 +15,7 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
 endif()
 configure_file(src/wizard_revision.h.in generated/wizard_revision.h @ONLY)
 
-add_library(_varikey src/varikey_gadget_usb.cpp)
+add_library(_varikey src/varikey_gadget_usb.cpp src/varikey_capabilities.cpp)
 add_library(VariKey::host ALIAS _varikey)
 set_target_properties(_varikey PROPERTIES
     OUTPUT_NAME varikey-host EXPORT_NAME host
@@ -34,7 +34,7 @@ target_link_libraries(wizard PRIVATE VariKey::host)
 
 install(TARGETS _varikey EXPORT VariKeyHostTargets)
 install(TARGETS wizard RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES src/varikey_gadget_usb.hpp src/varikey_command.hpp
+install(FILES src/varikey_capabilities.hpp src/varikey_gadget_usb.hpp src/varikey_command.hpp
     src/varikey_device.hpp src/varikey_gadget.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/varikey)
 install(EXPORT VariKeyHostTargets NAMESPACE VariKey:: FILE VariKeyHostConfig.cmake
@@ -43,4 +43,11 @@ install(EXPORT VariKeyHostTargets NAMESPACE VariKey:: FILE VariKeyHostConfig.cma
 if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME wizard-help COMMAND wizard --help)
     set_tests_properties(wizard-help PROPERTIES PASS_REGULAR_EXPRESSION "--list")
+    add_executable(capabilities_test tests/capabilities.cpp)
+    target_link_libraries(capabilities_test PRIVATE VariKey::host)
+    add_test(NAME capabilities COMMAND capabilities_test)
+    add_test(NAME capabilities-io-error COMMAND wizard --capabilities /dev/null)
+    set_tests_properties(capabilities-io-error PROPERTIES WILL_FAIL TRUE)
+    add_test(NAME capabilities-help COMMAND wizard --help)
+    set_tests_properties(capabilities-help PROPERTIES PASS_REGULAR_EXPRESSION "--capabilities")
 endif()
